@@ -6,9 +6,15 @@ OAuth 2.1 proxy bridging Open WebUI's Dynamic Client Registration with Slack's M
 [![License](https://img.shields.io/github/license/adaofeliz/slack-mcp-oauth-proxy)](LICENSE)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/adaofeliz/slack-mcp-oauth-proxy/pkgs/container/slack-mcp-oauth-proxy)
 
-## What is this?
+## Why does this exist?
 
-Open WebUI uses Dynamic Client Registration (RFC 7591) to connect to MCP servers. Slack's MCP server requires a pre-registered Slack App with static credentials. This proxy bridges the gap by acting as an OAuth Authorization Server to Open WebUI and an OAuth Client to Slack.
+Slack's MCP server at `mcp.slack.com` uses **static OAuth** -- you need a pre-registered Slack App with a Client ID and Secret. Open WebUI's MCP integration uses **Dynamic Client Registration** (RFC 7591), where it auto-registers itself with whatever MCP server you point it at. These two models are incompatible.
+
+Open WebUI recently added an `oauth_2.1_static` auth type, but as of April 2025 it has [several bugs](https://github.com/open-webui/open-webui/discussions/23510) that prevent it from working end-to-end with Slack (missing OAuth redirects, tokens not injected into requests, NULL expiry crashes, wrong client_id in the encrypted blob).
+
+This proxy is the workaround. It sits between Open WebUI and Slack, speaking Dynamic Client Registration on the Open WebUI side and static OAuth on the Slack side. Open WebUI thinks it's talking to a standard MCP server. Slack thinks it's talking to a normal OAuth client. Neither knows about the other's auth model.
+
+Once Open WebUI fixes the `oauth_2.1_static` bugs upstream, this proxy may no longer be needed. Until then, it's the only way to reliably connect Open WebUI to Slack's MCP server.
 
 ## Architecture
 
