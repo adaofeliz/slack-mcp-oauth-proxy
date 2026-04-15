@@ -1,6 +1,6 @@
 services:
   proxy:
-    build: ..
+    image: ghcr.io/adaofeliz/slack-mcp-oauth-proxy:latest
     ports:
       - '3000:3000'
     volumes:

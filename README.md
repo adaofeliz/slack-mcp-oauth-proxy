@@ -28,38 +28,83 @@ Open WebUI uses Dynamic Client Registration (RFC 7591) to connect to MCP servers
                                         └───────────┘
 ```
 
-## Quick Start
+## Prerequisites
 
-1. **Create a Slack App** at https://api.slack.com/apps — enable OAuth, add redirect URI: `https://your-proxy.example.com/oauth/callback`
-2. **Clone and configure**:
-   ```bash
-   git clone https://github.com/adaofeliz/slack-mcp-oauth-proxy
-   cd slack-mcp-oauth-proxy
-   cp .env.example .env
-   # Edit .env: set PROXY_BASE_URL, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET
-   # Generate encryption key:
-   openssl rand -hex 32
-   # Set TOKEN_ENCRYPTION_KEY in .env
-   ```
-3. **Start**:
-   ```bash
-   docker compose up -d
-   ```
-4. **Configure Open WebUI**: Add `https://your-proxy.example.com/mcp` as an MCP server URL
+Create a **Slack App** at https://api.slack.com/apps:
+
+- Enable OAuth
+- Add redirect URI: `https://your-proxy.example.com/oauth/callback`
+- Note your **Client ID** and **Client Secret**
+
+## Deploy with Docker (recommended)
+
+No need to clone the repo. Just create two files:
+
+**docker-compose.yml**
+
+```yaml
+services:
+  proxy:
+    image: ghcr.io/adaofeliz/slack-mcp-oauth-proxy:latest
+    ports:
+      - '3000:3000'
+    volumes:
+      - proxy-data:/app/data
+    env_file: .env
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  proxy-data:
+```
+
+**.env**
+
+```env
+PROXY_BASE_URL=https://your-proxy.example.com
+SLACK_CLIENT_ID=your-slack-app-client-id
+SLACK_CLIENT_SECRET=your-slack-app-client-secret
+TOKEN_ENCRYPTION_KEY=   # generate with: openssl rand -hex 32
+```
+
+Then:
+
+```bash
+docker compose up -d
+```
+
+Configure **Open WebUI** to use `https://your-proxy.example.com/mcp` as an MCP server URL.
+
+## Deploy from Source
+
+```bash
+git clone https://github.com/adaofeliz/slack-mcp-oauth-proxy
+cd slack-mcp-oauth-proxy
+cp .env.example .env
+# Edit .env: set PROXY_BASE_URL, SLACK_CLIENT_ID, SLACK_CLIENT_SECRET
+# Generate encryption key:
+openssl rand -hex 32
+# Set TOKEN_ENCRYPTION_KEY in .env
+docker compose up -d --build
+```
 
 ## Configuration Reference
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| PROXY_PORT | No | 3000 | Port the proxy listens on |
-| PROXY_BASE_URL | Yes | — | Public URL of the proxy (e.g., https://your-proxy.example.com) |
-| SLACK_CLIENT_ID | Yes | — | Slack App Client ID |
-| SLACK_CLIENT_SECRET | Yes | — | Slack App Client Secret |
-| SLACK_MCP_URL | No | https://mcp.slack.com/mcp | Slack MCP server endpoint |
-| SLACK_USER_SCOPES | No | search:read.public,... | OAuth scopes for Slack user tokens |
-| DB_PATH | No | ./data/proxy.db | SQLite database file path |
-| SESSION_TTL_SECONDS | No | 600 | Authorization session timeout (seconds) |
-| TOKEN_ENCRYPTION_KEY | Yes | — | 32-byte hex key for AES-256-GCM encryption |
+| Variable             | Required | Default                   | Description                                                    |
+| -------------------- | -------- | ------------------------- | -------------------------------------------------------------- |
+| PROXY_PORT           | No       | 3000                      | Port the proxy listens on                                      |
+| PROXY_BASE_URL       | Yes      | —                         | Public URL of the proxy (e.g., https://your-proxy.example.com) |
+| SLACK_CLIENT_ID      | Yes      | —                         | Slack App Client ID                                            |
+| SLACK_CLIENT_SECRET  | Yes      | —                         | Slack App Client Secret                                        |
+| SLACK_MCP_URL        | No       | https://mcp.slack.com/mcp | Slack MCP server endpoint                                      |
+| SLACK_USER_SCOPES    | No       | search:read.public,...    | OAuth scopes for Slack user tokens                             |
+| DB_PATH              | No       | ./data/proxy.db           | SQLite database file path                                      |
+| SESSION_TTL_SECONDS  | No       | 600                       | Authorization session timeout (seconds)                        |
+| TOKEN_ENCRYPTION_KEY | Yes      | —                         | 32-byte hex key for AES-256-GCM encryption                     |
 
 ## How It Works
 
@@ -83,16 +128,16 @@ npm run typecheck     # type check
 
 ## API Reference
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /.well-known/oauth-authorization-server | OAuth AS metadata (RFC 8414) |
-| GET | /.well-known/oauth-protected-resource | Protected resource metadata (RFC 9728) |
-| POST | /oauth/register | Dynamic client registration (RFC 7591) |
-| GET | /oauth/authorize | Start OAuth authorization flow |
-| GET | /oauth/callback | Slack OAuth callback |
-| POST | /oauth/token | Token exchange with PKCE |
-| POST/GET/DELETE | /mcp | MCP proxy endpoint |
-| GET | /health | Health check |
+| Method          | Path                                    | Description                            |
+| --------------- | --------------------------------------- | -------------------------------------- |
+| GET             | /.well-known/oauth-authorization-server | OAuth AS metadata (RFC 8414)           |
+| GET             | /.well-known/oauth-protected-resource   | Protected resource metadata (RFC 9728) |
+| POST            | /oauth/register                         | Dynamic client registration (RFC 7591) |
+| GET             | /oauth/authorize                        | Start OAuth authorization flow         |
+| GET             | /oauth/callback                         | Slack OAuth callback                   |
+| POST            | /oauth/token                            | Token exchange with PKCE               |
+| POST/GET/DELETE | /mcp                                    | MCP proxy endpoint                     |
+| GET             | /health                                 | Health check                           |
 
 ## License
 
