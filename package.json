@@ -1,0 +1,43 @@
+{
+  "name": "slack-mcp-oauth-proxy",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OAuth 2.1 proxy bridging Open WebUI Dynamic Client Registration with Slack MCP static OAuth",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "lint": "eslint src/ tests/",
+    "prepare": "husky",
+    "format": "prettier --write src/"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.0.0",
+    "better-sqlite3": "^9.0.0",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^7.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.3",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.58.2",
+    "vitest": "^2.0.0"
+  }
+}
