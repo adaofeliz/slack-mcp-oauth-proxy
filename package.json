@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint src/ tests/",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "format": "prettier --write src/"
   },
   "lint-staged": {
