@@ -4,6 +4,7 @@ import { createSession } from '../store/sessions.js'
 import { buildSlackAuthorizeUrl } from '../lib/slack-oauth.js'
 import { invalidRequest, invalidClient, toErrorResponse } from '../lib/errors.js'
 import { config } from '../config.js'
+import { log } from '../lib/logger.js'
 
 export async function handleAuthorize(c: Context): Promise<Response> {
   const clientId = c.req.query('client_id')
@@ -22,6 +23,7 @@ export async function handleAuthorize(c: Context): Promise<Response> {
     !codeChallengeMethod ||
     !responseType
   ) {
+    log.warn('authorize: missing params', { client_id: clientId })
     return toErrorResponse(
       invalidRequest(
         'Missing required parameters: client_id, redirect_uri, state, code_challenge, code_challenge_method, response_type',
@@ -39,10 +41,12 @@ export async function handleAuthorize(c: Context): Promise<Response> {
 
   const client = getClient(clientId)
   if (!client) {
+    log.warn('authorize: unknown client', { client_id: clientId })
     return toErrorResponse(invalidClient('Unknown client_id'))
   }
 
   if (!validateRedirectUri(clientId, redirectUri)) {
+    log.warn('authorize: redirect_uri mismatch', { client_id: clientId, redirect_uri: redirectUri })
     return toErrorResponse(invalidRequest('redirect_uri does not match registered URIs'))
   }
 
@@ -67,6 +71,11 @@ export async function handleAuthorize(c: Context): Promise<Response> {
     callbackUri,
     config.SLACK_USER_SCOPES,
   )
+
+  log.info('authorize: redirecting to Slack', {
+    client_id: clientId,
+    session_id: session.id,
+  })
 
   return new Response(null, {
     status: 302,

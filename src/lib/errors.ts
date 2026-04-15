@@ -1,7 +1,5 @@
-// src/lib/errors.ts
-// Typed OAuth 2.1 error responses
-
 import type { Context } from 'hono'
+import { log } from './logger.js'
 
 export class OAuthError extends Error {
   public readonly error: string
@@ -41,9 +39,6 @@ export function accessDenied(description: string): OAuthError {
   return new OAuthError('access_denied', description, 403)
 }
 
-/**
- * Convert an OAuthError to a JSON HTTP Response.
- */
 export function toErrorResponse(err: OAuthError): Response {
   return new Response(
     JSON.stringify({ error: err.error, error_description: err.error_description }),
@@ -54,14 +49,11 @@ export function toErrorResponse(err: OAuthError): Response {
   )
 }
 
-/**
- * Hono-compatible global error handler.
- * Wraps unknown errors as server_error without leaking internals.
- */
 export function handleError(c: Context, err: unknown): Response {
   if (err instanceof OAuthError) {
     return toErrorResponse(err)
   }
-  // Do not expose internal error details
+  const msg = err instanceof Error ? err.message : String(err)
+  log.error('unhandled error', { error: msg, path: c.req.path })
   return toErrorResponse(serverError('An internal server error occurred'))
 }

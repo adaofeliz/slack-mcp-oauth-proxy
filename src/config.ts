@@ -1,6 +1,3 @@
-// src/config.ts
-// Configuration module — reads and validates all environment variables at startup
-
 function requireEnv(name: string): string {
   const value = process.env[name]
   if (!value) {
@@ -22,13 +19,20 @@ function validateHexKey(key: string, name: string): void {
 }
 
 function validateUrl(url: string, name: string): void {
+  let parsed: URL
   try {
-    new URL(url)
+    parsed = new URL(url)
   } catch {
-    throw new Error(`Invalid ${name}: must be a valid URL`)
+    throw new Error(`Invalid ${name}: must be a valid URL, got "${url}"`)
   }
   if (url.endsWith('/')) {
     throw new Error(`Invalid ${name}: must not have a trailing slash`)
+  }
+  const placeholders = ['your-proxy.example.com', 'example.com', 'localhost.example']
+  if (placeholders.some((p) => parsed.hostname.includes(p))) {
+    throw new Error(
+      `Invalid ${name}: "${url}" looks like a placeholder. Set this to your actual proxy URL (e.g., https://slack-mcp.yourdomain.com)`,
+    )
   }
 }
 

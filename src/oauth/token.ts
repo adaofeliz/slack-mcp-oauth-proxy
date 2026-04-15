@@ -4,6 +4,7 @@ import { getSessionByProxyCode, consumeSession, decryptSessionTokens } from '../
 import { createToken } from '../store/tokens.js'
 import { verifyPkce } from './pkce.js'
 import { invalidRequest, invalidGrant, toErrorResponse } from '../lib/errors.js'
+import { log } from '../lib/logger.js'
 
 export async function handleToken(c: Context): Promise<Response> {
   let params: URLSearchParams
@@ -19,7 +20,7 @@ export async function handleToken(c: Context): Promise<Response> {
   const codeVerifier = params.get('code_verifier')
   const clientId = params.get('client_id')
   const redirectUri = params.get('redirect_uri')
-  const resource = params.get('resource') // RFC 8707 — optional
+  const resource = params.get('resource')
 
   if (grantType !== 'authorization_code') {
     return toErrorResponse(invalidRequest('grant_type must be "authorization_code"'))
@@ -33,18 +34,22 @@ export async function handleToken(c: Context): Promise<Response> {
 
   const session = getSessionByProxyCode(code)
   if (!session) {
+    log.warn('token: invalid or expired code', { client_id: clientId })
     return toErrorResponse(invalidGrant('Invalid or expired authorization code'))
   }
 
   if (session.expires_at <= Math.floor(Date.now() / 1000)) {
+    log.warn('token: expired session', { client_id: clientId, session_id: session.id })
     return toErrorResponse(invalidGrant('Invalid or expired authorization code'))
   }
 
   if (session.consumed) {
+    log.warn('token: code already consumed', { client_id: clientId, session_id: session.id })
     return toErrorResponse(invalidGrant('Authorization code has already been used'))
   }
 
   if (session.client_id !== clientId) {
+    log.warn('token: client_id mismatch', { expected: session.client_id, got: clientId })
     return toErrorResponse(invalidGrant('client_id does not match'))
   }
 
@@ -52,7 +57,6 @@ export async function handleToken(c: Context): Promise<Response> {
     return toErrorResponse(invalidGrant('redirect_uri does not match'))
   }
 
-  // RFC 8707: validate resource parameter if present
   if (resource) {
     const expectedResource = `${config.PROXY_BASE_URL}/mcp`
     if (resource !== expectedResource) {
@@ -61,6 +65,7 @@ export async function handleToken(c: Context): Promise<Response> {
   }
 
   if (!verifyPkce(codeVerifier, session.code_challenge)) {
+    log.warn('token: PKCE verification failed', { client_id: clientId })
     return toErrorResponse(invalidGrant('PKCE verification failed: invalid code_verifier'))
   }
 
@@ -77,6 +82,8 @@ export async function handleToken(c: Context): Promise<Response> {
   })
 
   consumeSession(session.id)
+
+  log.info('token: issued proxy access token', { client_id: clientId })
 
   const responseBody: Record<string, unknown> = {
     access_token: proxyToken,

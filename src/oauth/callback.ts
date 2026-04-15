@@ -3,6 +3,7 @@ import { getSessionByProxyState, updateSessionWithSlackTokens } from '../store/s
 import { exchangeSlackCode } from '../lib/slack-oauth.js'
 import { invalidRequest, serverError, toErrorResponse } from '../lib/errors.js'
 import { config } from '../config.js'
+import { log } from '../lib/logger.js'
 
 export async function handleCallback(c: Context): Promise<Response> {
   const code = c.req.query('code')
@@ -10,15 +11,21 @@ export async function handleCallback(c: Context): Promise<Response> {
   const error = c.req.query('error')
 
   if (!state) {
+    log.warn('callback: missing state parameter')
     return toErrorResponse(invalidRequest('Missing state parameter'))
   }
 
   const session = getSessionByProxyState(state)
   if (!session) {
+    log.warn('callback: invalid or expired session state')
     return toErrorResponse(invalidRequest('Invalid or expired session state'))
   }
 
   if (error) {
+    log.warn('callback: user denied authorization', {
+      session_id: session.id,
+      error,
+    })
     const redirectUrl = new URL(session.owui_redirect)
     redirectUrl.searchParams.set('error', 'access_denied')
     redirectUrl.searchParams.set('state', session.owui_state)
@@ -38,7 +45,12 @@ export async function handleCallback(c: Context): Promise<Response> {
   let slackTokens
   try {
     slackTokens = await exchangeSlackCode(code, callbackUri)
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log.error('callback: Slack token exchange failed', {
+      session_id: session.id,
+      error: msg,
+    })
     return toErrorResponse(serverError('Failed to exchange authorization code with Slack'))
   }
 
@@ -47,6 +59,7 @@ export async function handleCallback(c: Context): Promise<Response> {
   const expiresIn = slackTokens.authed_user?.expires_in ?? slackTokens.expires_in
 
   if (!accessToken) {
+    log.error('callback: Slack did not return access token', { session_id: session.id })
     return toErrorResponse(serverError('Slack did not return an access token'))
   }
 
@@ -56,6 +69,12 @@ export async function handleCallback(c: Context): Promise<Response> {
     access_token: accessToken,
     refresh_token: refreshToken,
     expires_at: expiresAt,
+  })
+
+  log.info('callback: Slack tokens exchanged, redirecting to client', {
+    session_id: session.id,
+    has_refresh: !!refreshToken,
+    expires_in: expiresIn,
   })
 
   const redirectUrl = new URL(session.owui_redirect)
