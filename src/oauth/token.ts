@@ -85,15 +85,22 @@ export async function handleToken(c: Context): Promise<Response> {
 
   log.info('token: issued proxy access token', { client_id: clientId })
 
+  const now = Math.floor(Date.now() / 1000)
+
+  // Always include expires_in so OWUI can compute a non-null expires_at.
+  // Slack non-rotating tokens don't expire, so default to 365 days.
+  const DEFAULT_EXPIRES_IN = 365 * 24 * 60 * 60
+  let expiresIn = DEFAULT_EXPIRES_IN
+
+  if (slackTokens.expires_at) {
+    const remaining = slackTokens.expires_at - now
+    if (remaining > 0) expiresIn = remaining
+  }
+
   const responseBody: Record<string, unknown> = {
     access_token: proxyToken,
     token_type: 'Bearer',
-  }
-
-  if (slackTokens.expires_at) {
-    const now = Math.floor(Date.now() / 1000)
-    const expiresIn = slackTokens.expires_at - now
-    if (expiresIn > 0) responseBody.expires_in = expiresIn
+    expires_in: expiresIn,
   }
 
   return new Response(JSON.stringify(responseBody), {

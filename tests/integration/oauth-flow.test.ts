@@ -14,6 +14,7 @@ let mockSlackServer: ReturnType<typeof serve> | null = null
 let lastReceivedAuth: string | null = null
 let mockMcpCallCount = 0
 let mockMcpReturnStatus = 200
+let mockSlackExpiresIn: number | undefined = 43200
 
 beforeAll(async () => {
   const mockSlack = new Hono()
@@ -50,15 +51,16 @@ beforeAll(async () => {
       })
     }
 
-    return c.json({
-      ok: true,
-      authed_user: {
-        id: 'U123',
-        access_token: 'mock-slack-access-token',
-        refresh_token: 'mock-refresh-token',
-        expires_in: 43200,
-      },
-    })
+    const authedUser: Record<string, unknown> = {
+      id: 'U123',
+      access_token: 'mock-slack-access-token',
+      refresh_token: 'mock-refresh-token',
+    }
+    if (mockSlackExpiresIn !== undefined) {
+      authedUser.expires_in = mockSlackExpiresIn
+    }
+
+    return c.json({ ok: true, authed_user: authedUser })
   })
 
   mockSlack.post('/mcp', async (c) => {
@@ -153,6 +155,7 @@ describe('full OAuth flow', () => {
     mockMcpCallCount = 0
     lastReceivedAuth = null
     mockMcpReturnStatus = 200
+    mockSlackExpiresIn = 43200
   })
 
   afterEach(() => {
@@ -246,6 +249,51 @@ describe('full OAuth flow', () => {
     })
     expect(mcpResp.status).toBe(200)
     expect(lastReceivedAuth).toBe('Bearer mock-slack-access-token')
+  })
+
+  it('token response includes expires_in even when Slack tokens do not expire', async () => {
+    mockSlackExpiresIn = undefined
+
+    const regResp = await app.request('/oauth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'owui',
+        redirect_uris: ['http://localhost:8080/callback'],
+      }),
+    })
+    expect(regResp.status).toBe(201)
+    const { client_id } = (await regResp.json()) as { client_id: string }
+
+    const verifier = randomToken(32)
+    const challenge = hashS256(verifier)
+
+    const authResp = await app.request(
+      `/oauth/authorize?client_id=${client_id}&redirect_uri=http://localhost:8080/callback&state=s&code_challenge=${challenge}&code_challenge_method=S256&response_type=code`,
+    )
+    expect(authResp.status).toBe(302)
+
+    const slackResp = await fetch(authResp.headers.get('Location') as string, {
+      redirect: 'manual',
+    })
+    const callbackUrl = new URL(slackResp.headers.get('Location') as string)
+    const callbackResp = await app.request(callbackUrl.pathname + callbackUrl.search)
+    const proxyCode = new URL(callbackResp.headers.get('Location') as string).searchParams.get(
+      'code',
+    )
+    expect(proxyCode).toBeTruthy()
+
+    const tokenResp = await app.request('/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=authorization_code&code=${proxyCode}&code_verifier=${verifier}&client_id=${client_id}&redirect_uri=http://localhost:8080/callback`,
+    })
+    expect(tokenResp.status).toBe(200)
+
+    const body = (await tokenResp.json()) as { access_token: string; expires_in?: number }
+    expect(body.access_token).toBeTruthy()
+    expect(body.expires_in).toBeDefined()
+    expect(body.expires_in).toBeGreaterThan(0)
   })
 
   it('token refresh: 401 from Slack triggers refresh and retry', async () => {
