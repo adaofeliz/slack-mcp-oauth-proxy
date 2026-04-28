@@ -4,9 +4,14 @@ import { initDb, closeDb } from './store/db.js'
 import { app } from './app.js'
 import { log } from './lib/logger.js'
 
+const { version } = JSON.parse(
+  (await import('node:fs')).readFileSync(new URL('../package.json', import.meta.url), 'utf-8'),
+)
+
 initDb(config.DB_PATH)
 
 log.info('starting', {
+  version,
   port: config.PROXY_PORT,
   proxy_base_url: config.PROXY_BASE_URL,
   slack_mcp_url: config.SLACK_MCP_URL,

@@ -1,6 +1,6 @@
 {
   "name": "slack-mcp-oauth-proxy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "OAuth 2.1 proxy bridging Open WebUI Dynamic Client Registration with Slack MCP static OAuth",
   "main": "dist/index.js",

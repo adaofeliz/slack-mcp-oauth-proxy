@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-28
+
+### Fixed
+- Strip empty-string arguments from `tools/call` requests before forwarding to
+  Slack's MCP server.  GPT-5.5 sends `cursor: ""` for the first page of search
+  results; Slack treats any non-null cursor as a pagination token, which caused
+  `slack_search_channels`, `slack_search_users`, `slack_search_public`, and
+  `slack_search_public_and_private` to always return "No results found" when
+  invoked via OWUI with this model.
+
 ## [0.1.0] - 2025-04-15
 
 ### Added

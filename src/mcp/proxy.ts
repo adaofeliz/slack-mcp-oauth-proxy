@@ -11,6 +11,64 @@ function extractBearerToken(authHeader: string | undefined): string | null {
   return match ? match[1] : null
 }
 
+/**
+ * Sanitize a JSON-RPC MCP request body before forwarding to Slack.
+ *
+ * Problem: LLMs such as GPT-5.5 send optional string parameters as "" (empty
+ * string) instead of omitting them.  Slack's MCP server treats any non-null
+ * cursor value as a pagination token — an empty string matches no page and
+ * returns "No results found" for all search tools.
+ *
+ * Fix: For tools/call requests, remove every argument whose value is exactly
+ * "" (empty string).  This is safe because every optional string parameter in
+ * the Slack MCP schema (cursor, latest, oldest, …) treats an absent value the
+ * same as null/unset.  No tool requires an empty string as a meaningful value.
+ */
+export function sanitizeMcpBody(rawBody: string): string {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(rawBody)
+  } catch {
+    // Not valid JSON — return unchanged so Slack can return its own error.
+    return rawBody
+  }
+
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    (parsed as Record<string, unknown>).method !== 'tools/call'
+  ) {
+    // Only touch tools/call requests.
+    return rawBody
+  }
+
+  const req = parsed as {
+    method: string
+    params?: { arguments?: Record<string, unknown> }
+    [key: string]: unknown
+  }
+
+  const args = req.params?.arguments
+  if (typeof args !== 'object' || args === null) {
+    return rawBody
+  }
+
+  const cleaned: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(args)) {
+    if (value !== '') {
+      cleaned[key] = value
+    }
+  }
+
+  return JSON.stringify({
+    ...req,
+    params: {
+      ...req.params,
+      arguments: cleaned,
+    },
+  })
+}
+
 async function forwardToSlack(
   method: string,
   body: string | null,
@@ -48,7 +106,12 @@ async function handleMcpRequest(c: Context, method: string): Promise<Response> {
   }
 
   const mcpSessionId = c.req.header('Mcp-Session-Id') ?? null
-  const body = method !== 'GET' && method !== 'DELETE' ? await c.req.text() : null
+
+  let body: string | null = null
+  if (method !== 'GET' && method !== 'DELETE') {
+    const rawBody = await c.req.text()
+    body = sanitizeMcpBody(rawBody)
+  }
 
   log.info('mcp: forwarding to Slack', { method, mcp_session_id: mcpSessionId })
 
