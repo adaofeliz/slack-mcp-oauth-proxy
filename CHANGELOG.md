@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.1] - 2026-04-28
+## [0.1.3] - 2026-04-28
 
 ### Fixed
 - Strip empty-string arguments from `tools/call` requests before forwarding to
